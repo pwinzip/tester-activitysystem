@@ -1,0 +1,334 @@
+// SciDI Activity Check-in System — Prisma schema
+// Merged: Better Auth core models + application domain models (spec v2 §18.1)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  STUDENT
+  STAFF
+  ADMIN
+}
+
+enum StudentStatus {
+  PENDING_EMAIL_VERIFICATION
+  ACTIVE
+  SUSPENDED
+}
+
+enum ActivityStatus {
+  DRAFT
+  OPEN
+  CLOSED
+  CANCELLED
+}
+
+enum OtpPurpose {
+  STUDENT_EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
+enum OtpStatus {
+  ACTIVE
+  USED
+  EXPIRED
+  LOCKED
+}
+
+enum AssessmentTrack {
+  REGISTRATION
+  EMAIL_OTP
+  AUTH_SESSION
+  ACTIVITY_MANAGEMENT
+  QR_CHECKIN
+  REPORT_ACCESS
+}
+
+enum AssessmentScenario {
+  NONE
+  REGISTRATION_STATUS_CODE_MISMATCH
+  OTP_ERROR_PRIORITY_MISMATCH
+  SESSION_LOGOUT_MESSAGE_MISMATCH
+  ACTIVITY_TRANSITION_VALIDATION_MISMATCH
+  DUPLICATE_CHECKIN_STATUS_MISMATCH
+  REPORT_FILTER_OR_SORT_MISMATCH
+}
+
+// ---------------------------------------------------------------------------
+// Better Auth core models
+// ---------------------------------------------------------------------------
+
+model User {
+  id                  String   @id @default(cuid())
+  name                String?
+  email               String   @unique
+  emailVerified       Boolean  @default(false)
+  image               String?
+  role                UserRole @default(STUDENT)
+  isAssessmentAccount Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions          Session[]
+  accounts          Account[]
+  emailOtps         EmailOtp[]
+  studentProfile    StudentProfile?
+  createdActivities Activity[] @relation("ActivityCreatedBy")
+  auditLogs         AuditLog[] @relation("AuditActor")
+
+  assessmentAsStudent AssessmentAssignment[] @relation("AssessmentStudent")
+  assessmentAsPending AssessmentAssignment[] @relation("AssessmentPending")
+  assessmentAsStaff   AssessmentAssignment[] @relation("AssessmentStaff")
+
+  @@index([role])
+  @@index([isAssessmentAccount])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("session")
+}
+
+model Account {
+  id         String @id @default(cuid())
+  accountId  String
+  providerId String
+  userId     String
+  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@index([expiresAt])
+  @@map("verification")
+}
+
+// ---------------------------------------------------------------------------
+// Application domain models
+// ---------------------------------------------------------------------------
+
+model StudentProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  studentId String        @unique
+  fullName  String
+  major     String
+  yearLevel Int
+  status    StudentStatus @default(PENDING_EMAIL_VERIFICATION)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attendances     Attendance[]
+  checkinAttempts CheckinAttempt[]
+
+  @@index([studentId])
+  @@index([status])
+  @@map("student_profile")
+}
+
+model EmailOtp {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  email   String
+  otpHash String
+  purpose OtpPurpose @default(STUDENT_EMAIL_VERIFICATION)
+  status  OtpStatus  @default(ACTIVE)
+
+  attempts    Int @default(0)
+  maxAttempts Int @default(5)
+
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([email])
+  @@index([status])
+  @@index([expiresAt])
+  @@map("email_otp")
+}
+
+model Activity {
+  id           String         @id @default(cuid())
+  activityCode String         @unique
+  title        String
+  description  String?
+  activityDate DateTime
+  startTime    DateTime
+  endTime      DateTime
+  location     String
+  status       ActivityStatus @default(DRAFT)
+
+  qrToken     String    @unique
+  qrExpiresAt DateTime?
+
+  ownerGroupCode   String?
+  isAssessmentData Boolean @default(false)
+
+  createdById String
+  createdBy   User   @relation("ActivityCreatedBy", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attendances           Attendance[]
+  checkinAttempts       CheckinAttempt[]
+  assessmentAssignments AssessmentAssignment[]
+
+  @@index([status])
+  @@index([activityDate])
+  @@index([qrToken])
+  @@index([ownerGroupCode])
+  @@index([isAssessmentData])
+  @@map("activity")
+}
+
+model Attendance {
+  id String @id @default(cuid())
+
+  activityId String
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  studentProfileId String
+  studentProfile   StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  checkinTime DateTime @default(now())
+  ipAddress   String?
+  userAgent   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([activityId, studentProfileId])
+  @@index([activityId])
+  @@index([studentProfileId])
+  @@index([checkinTime])
+  @@map("attendance")
+}
+
+model CheckinAttempt {
+  id         String    @id @default(cuid())
+  activityId String?
+  activity   Activity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+
+  studentProfileId String?
+  studentProfile   StudentProfile? @relation(fields: [studentProfileId], references: [id], onDelete: SetNull)
+
+  qrTokenFingerprint String?
+  resultCode         String
+  accepted           Boolean
+  requestId          String?
+  ipAddress          String?
+  userAgent          String?
+
+  createdAt DateTime @default(now())
+
+  @@index([activityId])
+  @@index([studentProfileId])
+  @@index([resultCode])
+  @@index([createdAt])
+  @@map("checkin_attempt")
+}
+
+model AuditLog {
+  id          String @id @default(cuid())
+  actorUserId String?
+  actorUser   User?  @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  action     String
+  entityType String
+  entityId   String?
+  requestId  String?
+  metadata   Json?
+  ipAddress  String?
+  userAgent  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([actorUserId])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_log")
+}
+
+model AssessmentAssignment {
+  id               String             @id @default(cuid())
+  testerCode       String             @unique
+  groupNumber      Int
+  track            AssessmentTrack
+  datasetCode      String             @unique
+  scenarioCode     AssessmentScenario @default(NONE)
+  assignedFunction String
+  active           Boolean            @default(true)
+  notes            String?
+
+  studentUserId String
+  studentUser   User   @relation("AssessmentStudent", fields: [studentUserId], references: [id], onDelete: Cascade)
+
+  pendingUserId String
+  pendingUser   User   @relation("AssessmentPending", fields: [pendingUserId], references: [id], onDelete: Cascade)
+
+  staffUserId String
+  staffUser   User   @relation("AssessmentStaff", fields: [staffUserId], references: [id], onDelete: Cascade)
+
+  activityId String   @unique
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([groupNumber])
+  @@index([track])
+  @@index([scenarioCode])
+  @@index([active])
+  @@map("assessment_assignment")
+}

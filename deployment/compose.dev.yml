@@ -1,0 +1,22 @@
+# Local development: PostgreSQL only.
+# Next.js (web + API route handlers) runs on the host via `npm run dev`.
+services:
+  db:
+    image: postgres:16
+    container_name: scidi_activity_db_dev
+    environment:
+      POSTGRES_USER: scidi
+      POSTGRES_PASSWORD: scidi_dev
+      POSTGRES_DB: scidi_activity
+    ports:
+      - "5433:5432"
+    volumes:
+      - scidi_dev_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scidi -d scidi_activity"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  scidi_dev_pgdata:

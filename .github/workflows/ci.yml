@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # Placeholder env so build-time validation passes (no DB connection needed).
+    env:
+      NODE_ENV: production
+      APP_MODE: development
+      DATABASE_URL: postgresql://build:build@localhost:5432/build?schema=public
+      BETTER_AUTH_SECRET: ci-placeholder-secret-please-change-min-32-characters
+      BETTER_AUTH_URL: http://localhost:3000
+      PUBLIC_APP_URL: http://localhost:3000
+      OTP_HASH_PEPPER: ci-placeholder-pepper
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build

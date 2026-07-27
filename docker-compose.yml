@@ -1,0 +1,55 @@
+# Local, self-contained stack for students: `docker compose up`.
+# Runs PostgreSQL + the Next.js app (which serves both the web UI and the API).
+# No VPS required — everything runs on the student's machine.
+services:
+  db:
+    image: postgres:16
+    container_name: scidi_activity_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: scidi
+      POSTGRES_PASSWORD: scidi_local
+      POSTGRES_DB: scidi_activity
+    ports:
+      # Host port is overridable to avoid clashing with a local Postgres.
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - scidi_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scidi -d scidi_activity"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build: .
+    container_name: scidi_activity_web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    # Values are hardcoded (not ${...}) so a stray local .env file cannot change
+    # the classroom profile. Edit here for real deployments / different modes.
+    environment:
+      NODE_ENV: production
+      APP_MODE: assessment
+      PUBLIC_APP_URL: http://localhost:3000
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      NEXT_PUBLIC_API_BASE_URL: /api
+      DATABASE_URL: postgresql://scidi:scidi_local@db:5432/scidi_activity?schema=public
+      BETTER_AUTH_URL: http://localhost:3000
+      BETTER_AUTH_SECRET: local-only-secret-change-me-min-32-characters
+      OTP_HASH_PEPPER: local-only-pepper-change-me
+      MAIL_PROVIDER: console
+      OTP_EXPIRES_MINUTES: "10"
+      OTP_MAX_ATTEMPTS: "5"
+      ASSESSMENT_FIXED_OTP_ENABLED: "true"
+      ASSESSMENT_CONFIRMATION_TOKEN: local-purge-token
+      ASSESSMENT_EMAIL_MODE: test
+      ASSESSMENT_EXPORT_DIR: /app/artifacts
+      LOG_LEVEL: info
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  scidi_pgdata:

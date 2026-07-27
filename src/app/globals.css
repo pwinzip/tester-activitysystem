@@ -1,26 +1,138 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* Class-based dark mode: `dark:` variants apply under a `.dark` ancestor. */
+@custom-variant dark (&:where(.dark, .dark *));
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+@theme {
+  --color-navy: #071b33;
+  --color-midnight: #0b2545;
+  --color-cyan: #18d6d6;
+  --color-indigo: #6366f1;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-softwhite: #f8fafc;
+  --color-muted: #94a3b8;
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
+/* ---- Semantic surface tokens (light) ---- */
+:root {
+  --page-bg: #eaf1f9;
+  --page-glow-1: rgba(24, 214, 214, 0.18);
+  --page-glow-2: rgba(99, 102, 241, 0.2);
+  --text: #0b2545;
+  --text-muted: #5b6b82;
+  --glass-bg: rgba(255, 255, 255, 0.6);
+  --glass-bg-strong: rgba(255, 255, 255, 0.78);
+  --glass-border: rgba(255, 255, 255, 0.75);
+  --glass-shadow: 0 10px 40px -12px rgba(11, 37, 69, 0.28);
+  --field-bg: rgba(255, 255, 255, 0.7);
+  --field-border: rgba(11, 37, 69, 0.14);
+  --hairline: rgba(11, 37, 69, 0.1);
+}
+
+/* ---- Dark overrides ---- */
+.dark {
+  --page-bg: #071b33;
+  --page-glow-1: rgba(24, 214, 214, 0.16);
+  --page-glow-2: rgba(99, 102, 241, 0.22);
+  --text: #f8fafc;
+  --text-muted: #94a3b8;
+  --glass-bg: rgba(255, 255, 255, 0.06);
+  --glass-bg-strong: rgba(255, 255, 255, 0.1);
+  --glass-border: rgba(255, 255, 255, 0.14);
+  --glass-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.55);
+  --field-bg: rgba(255, 255, 255, 0.05);
+  --field-border: rgba(255, 255, 255, 0.16);
+  --hairline: rgba(255, 255, 255, 0.1);
+}
+
+/* No-JS fallback: respect system preference when no explicit theme class. */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not(.light) {
+    --page-bg: #071b33;
+    --page-glow-1: rgba(24, 214, 214, 0.16);
+    --page-glow-2: rgba(99, 102, 241, 0.22);
+    --text: #f8fafc;
+    --text-muted: #94a3b8;
+    --glass-bg: rgba(255, 255, 255, 0.06);
+    --glass-bg-strong: rgba(255, 255, 255, 0.1);
+    --glass-border: rgba(255, 255, 255, 0.14);
+    --glass-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.55);
+    --field-bg: rgba(255, 255, 255, 0.05);
+    --field-border: rgba(255, 255, 255, 0.16);
+    --hairline: rgba(255, 255, 255, 0.1);
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--text);
+  background-color: var(--page-bg);
+  background-image:
+    radial-gradient(60rem 60rem at 12% -10%, var(--page-glow-1), transparent 60%),
+    radial-gradient(50rem 50rem at 100% 0%, var(--page-glow-2), transparent 55%),
+    radial-gradient(40rem 40rem at 50% 120%, var(--page-glow-1), transparent 60%);
+  background-attachment: fixed;
+  min-height: 100dvh;
+}
+
+/* ---- Glass primitives ---- */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+.glass-strong {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+.hairline {
+  border-color: var(--hairline);
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+/* Field surface used by inputs/selects */
+.field {
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
+  color: var(--text);
+}
+.field::placeholder {
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+.field:focus {
+  outline: none;
+  border-color: var(--color-cyan);
+  box-shadow: 0 0 0 3px rgba(24, 214, 214, 0.25);
+}
+
+/* QR must always render on pure white for scan reliability (spec §12). */
+.qr-surface {
+  background: #ffffff;
+  color: #0b2545;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.animate-spin-slow {
+  animation: spin 0.7s linear infinite;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
 }
