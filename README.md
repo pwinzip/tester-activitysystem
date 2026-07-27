@@ -24,6 +24,17 @@ the repo and runs their own isolated copy.
 ```bash
 git clone <your-repo-url> scidi-activity-checkin
 cd scidi-activity-checkin
+
+# 1) Create your config from the template
+cp .env.docker.example .env.docker
+
+# 2) Generate your own secrets and paste them into .env.docker
+openssl rand -base64 48   # -> BETTER_AUTH_SECRET
+openssl rand -base64 32   # -> OTP_HASH_PEPPER
+#    also set POSTGRES_PASSWORD (and the same password inside DATABASE_URL)
+#    and ASSESSMENT_CONFIRMATION_TOKEN to any secret string.
+
+# 3) Start
 docker compose up --build
 ```
 
@@ -38,6 +49,24 @@ To also wipe the database volume: `docker compose down -v`.
 
 > **Ports:** if `3000` or `5432` are already used on your machine, start with
 > overrides, e.g. `WEB_PORT=3005 DB_PORT=5434 docker compose up --build`.
+
+### Configuration & secrets
+
+All Docker configuration lives in **`.env.docker`** (copied from
+`.env.docker.example`; it is git-ignored so your secrets are never committed).
+Both containers read it.
+
+- **You must generate your own** `BETTER_AUTH_SECRET`, `OTP_HASH_PEPPER`, and set
+  a `POSTGRES_PASSWORD` — see the `openssl` commands above. `DATABASE_URL` must
+  contain the same `POSTGRES_PASSWORD` value.
+- **SMTP is not needed** for the class: with `MAIL_PROVIDER=console` the OTP is
+  printed to the app log (`docker compose logs -f web`), so `SMTP_HOST` /
+  `SMTP_USER` / `SMTP_PASS` can stay blank. Only fill them (and set
+  `MAIL_PROVIDER=smtp`) if you want real email delivery.
+- Which template? **Docker → `.env.docker` (from `.env.docker.example`).**
+  For the “Run without Docker” path below use `.env` (from `.env.example`).
+  `.env.assessment.example` / `.env.production.example` are references for other
+  deployments.
 
 ---
 
@@ -61,18 +90,41 @@ Read the exported credentials out of the container:
 docker compose exec web sh -c 'ls -1 artifacts && cat artifacts/assessment-credentials-*.csv'
 ```
 
-Other assessment commands:
+### Assessment maintenance commands — what they do and when to use them
+
+**`assessment:reset -- T01`** — re-runs one tester back to a clean starting
+state **without touching the other 21**. Use it when a tester has already
+consumed their data (verified their OTP, checked in, changed their activity
+status, or registered a throw-away account) and needs to run the scenario again.
+It re-marks the pending account unverified with a fresh OTP, clears that
+activity’s attendance/attempts, revokes their sessions, restores the activity to
+OPEN, and deletes any stray account they registered.
 
 ```bash
-# Reset ONE tester's data (does not affect others)
 docker compose exec web npm run assessment:reset -- T01
-
-# Re-export the teacher credentials CSV
-docker compose exec web npm run assessment:export
-
-# Purge ALL assessment data (needs the confirmation token)
-docker compose exec web npm run assessment:purge -- local-purge-token
 ```
+
+**`assessment:export`** — regenerates the teacher-only credentials/assignment
+CSV in `artifacts/` (emails, passwords, QR URLs, datasets, fixed OTPs). Use it
+if you lost the file from the seed step or changed `ASSESSMENT_EMAIL_MODE`.
+(The random `admin.demo` password is shown only during `assessment:seed`.)
+
+```bash
+docker compose exec web npm run assessment:export
+```
+
+**`assessment:purge -- <token>`** — deletes **all** assessment data (the 22
+testers, staff, admin.demo, their activities and assignments) and nothing else.
+Use it to wipe everything after the assessment period, or before a clean
+re-seed. The `<token>` must equal `ASSESSMENT_CONFIRMATION_TOKEN` from
+`.env.docker` (a safety guard so it can’t run by accident).
+
+```bash
+docker compose exec web npm run assessment:purge -- <ASSESSMENT_CONFIRMATION_TOKEN>
+```
+
+> Typical lifecycle: `assessment:seed` once → students work → `assessment:reset -- Txx`
+> as needed for retries → `assessment:purge` at the end.
 
 ### Email / OTP in the test environment
 
